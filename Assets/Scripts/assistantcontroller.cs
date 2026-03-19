@@ -3,8 +3,13 @@ using UnityEngine.AI;
 
 public class AssistantController : MonoBehaviour
 {
-    public Transform playerTarget; // This is now your Assistant_Destination point
-    public Transform vrHeadset;    // We will drag your Main Camera here!
+    [Header("Destinations")]
+    [Tooltip("Where he walks right when the game starts")]
+    public Transform initialDestination;
+    
+    [Tooltip("Drag the Main Camera (from XR Origin) here")]
+    public Transform playerCamera;
+
     private NavMeshAgent agent;
     private Animator animator;
 
@@ -13,26 +18,44 @@ public class AssistantController : MonoBehaviour
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponent<Animator>();
 
-        if (playerTarget != null)
+        // 1. Instantly walk to the starting point to greet the user
+        if (initialDestination != null)
         {
-            agent.SetDestination(playerTarget.position);
-            animator.SetBool("isWalking", true);
+            MoveToStation(initialDestination);
         }
     }
 
     void Update()
     {
+        // 2. Check if he has reached wherever he is currently going
         if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
-            animator.SetBool("isWalking", false); 
+            // Stop the walking animation
+            animator.SetBool("isWalking", false);
             
-            // Look at the VR Headset instead of the floor target
-            if (vrHeadset != null)
-            {
-                Vector3 lookDirection = vrHeadset.position - transform.position;
-                lookDirection.y = 0; 
-                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(lookDirection), Time.deltaTime * 5f);
-            }
+            // Look at the player
+            FacePlayer(); 
+        }
+    }
+
+    // 3. The Teleport Pad will trigger this!
+    public void MoveToStation(Transform newTarget)
+    {
+        agent.SetDestination(newTarget.position);
+        
+        // Trigger the walking animation
+        animator.SetBool("isWalking", true); 
+    }
+
+    void FacePlayer()
+    {
+        if (playerCamera != null)
+        {
+            Vector3 direction = (playerCamera.position - transform.position).normalized;
+            direction.y = 0; // Keep him standing straight
+            
+            Quaternion lookRotation = Quaternion.LookRotation(direction);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
         }
     }
 }
