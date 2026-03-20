@@ -20,13 +20,19 @@ public class EquipOnGrab : MonoBehaviour
 
     private void OnEquip(SelectEnterEventArgs args)
     {
-        Debug.Log($"{equipmentName} successfully equipped!");
-
-        // Tell the UI Manager to show the message on screen!
+        // Tell the UI Manager to show the message on screen
         if (EquipmentNotification.Instance != null)
         {
             EquipmentNotification.Instance.ShowMessage($"{equipmentName} Equipped!");
         }
+
+        // --- NEW CODE: Update the Lab Manager State ---
+        if (equipmentName.ToLower().Contains("glove")) 
+            LabManager.Instance.isWearingGloves = true;
+            
+        if (equipmentName.ToLower().Contains("glass")) 
+            LabManager.Instance.isWearingGlasses = true;
+        // ----------------------------------------------
 
         Destroy(gameObject);
     }
