@@ -8,17 +8,22 @@ public class ReactionQuizUI : MonoBehaviour
     public GameObject quizPanel;
     public TMP_Text questionText;
     public TMP_Text resultText;
+    public CabbageBeakerReaction beaker;
 
     private ChemicalType currentCorrectAnswer;
     private bool quizOpen = false;
 
     private void Start()
     {
-        if (quizPanel != null)
+        if (quizPanel != null){
+            Debug.Log("Calling quizPanel");
             quizPanel.SetActive(false);
+        }
 
-        if (resultText != null)
+        if (resultText != null){
+            Debug.Log("Calling resultText");
             resultText.text = "";
+        }
     }
 
     public void ShowQuestion(ChemicalType correctChemical)
@@ -38,20 +43,27 @@ public class ReactionQuizUI : MonoBehaviour
 
     public void SelectAnswer(int selectedChemicalIndex)
     {
-        if (!quizOpen) return;
-
         ChemicalType selected = (ChemicalType)selectedChemicalIndex;
 
         if (selected == currentCorrectAnswer)
         {
-            if (resultText != null)
-                resultText.text = "Correct!";
+            resultText.text = "Correct!";
         }
         else
         {
-            if (resultText != null)
-                resultText.text = "Wrong. Correct answer: " + currentCorrectAnswer;
+            resultText.text = "Wrong!";
         }
+
+        // 👉 Reset after 2 seconds
+        Invoke("FinishQuiz", 2f);
+    }
+
+    void FinishQuiz()
+    {
+        CloseQuiz();
+
+        if (beaker != null)
+            beaker.ResetToNeutral();
     }
 
     public void CloseQuiz()

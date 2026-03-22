@@ -80,7 +80,7 @@ public class CabbageBeakerReaction : MonoBehaviour
 
         if (quizUI != null)
         {
-            quizUI.ShowQuestion(chem.chemicalType);
+            StartCoroutine(ShowQuizAfterDelay(chem.chemicalType, 1.5f));
         }
     }
 
@@ -107,5 +107,18 @@ public class CabbageBeakerReaction : MonoBehaviour
     {
         if (audioSource != null && clip != null)
             audioSource.PlayOneShot(clip);
+    }
+    public void ResetToNeutral()
+{
+    SetLiquidColor(neutralPurple);
+}
+    private System.Collections.IEnumerator ShowQuizAfterDelay(ChemicalType type, float delay)
+    {
+    yield return new WaitForSeconds(delay);
+
+    if (quizUI != null)
+    {
+        quizUI.ShowQuestion(type);
+    }
     }
 }
