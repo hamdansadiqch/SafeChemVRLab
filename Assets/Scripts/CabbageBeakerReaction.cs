@@ -19,6 +19,14 @@ public class CabbageBeakerReaction : MonoBehaviour
     [Header("Quiz UI")]
     public ReactionQuizUI quizUI;
 
+    [Header("Assistant Audio")]
+    [Tooltip("Drag the Assistant's Audio Source component here")]
+    public AudioSource assistantVoice;
+    [Tooltip("Drag 'select the correct ans' here")]
+    public AudioClip selectAnswerClip;
+    [Tooltip("Drag 'you win' here")]
+    public AudioClip youWinClip;
+
     [Header("Settings")]
     public float touchCooldown = 0.8f;
     private float nextTouchTime = 0f;
@@ -108,17 +116,47 @@ public class CabbageBeakerReaction : MonoBehaviour
         if (audioSource != null && clip != null)
             audioSource.PlayOneShot(clip);
     }
+
     public void ResetToNeutral()
-{
-    SetLiquidColor(neutralPurple);
-}
+    {
+        SetLiquidColor(neutralPurple);
+    }
+
+    // --- THE EXACT SEQUENCE YOU ASKED FOR ---
     private System.Collections.IEnumerator ShowQuizAfterDelay(ChemicalType type, float delay)
     {
-    yield return new WaitForSeconds(delay);
+        yield return new WaitForSeconds(delay);
 
-    if (quizUI != null)
-    {
-        quizUI.ShowQuestion(type);
+        // 1. QUIZ POPS UP FIRST
+        if (quizUI != null)
+        {
+            quizUI.ShowQuestion(type);
+        }
+
+        // 2. AUDIO OF CHOOSE THE CORRECT OPTION PLAYS
+        if (assistantVoice != null && selectAnswerClip != null)
+        {
+            assistantVoice.clip = selectAnswerClip;
+            assistantVoice.Play();
+            
+            // Wait exactly the length of the first audio before playing the second
+            yield return new WaitForSeconds(selectAnswerClip.length);
+        }
+
+        // 3. AND RIGHT AFTER IT THE YOU WIN AUDIO
+        if (assistantVoice != null && youWinClip != null)
+        {
+            assistantVoice.clip = youWinClip;
+            assistantVoice.Play();
+        }
     }
+
+    public void HandleQuizWin()
+    {
+        // Tells the manager the station is done so it can fire the final Congrats/Goodbye audios
+        if (ExperimentManager.Instance != null)
+        {
+            ExperimentManager.Instance.ReportExperimentComplete();
+        }
     }
 }
