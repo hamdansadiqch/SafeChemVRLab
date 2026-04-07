@@ -48,6 +48,12 @@ public class ReactionQuizUI : MonoBehaviour
         if (selected == currentCorrectAnswer)
         {
             resultText.text = "Correct!";
+            
+            // --- NEW: Tell the beaker to play the victory audio and finish the station! ---
+            if (beaker != null)
+            {
+                beaker.HandleQuizWin();
+            }
         }
         else
         {

@@ -4,174 +4,170 @@ public class MixingFlask : MonoBehaviour
 {
     [Header("Visual Feedback")]
     public MeshRenderer liquidRenderer; 
-    
-    [Tooltip("Color when the flask is mostly Acid.")]
-    public Color acidColor = new Color(0.8f, 0.1f, 0.1f, 0.8f); // Red
-    
-    [Tooltip("Color when the flask is mostly Base.")]
-    public Color baseColor = new Color(0.1f, 0.1f, 0.8f, 0.8f); // Blue
-    
-    [Tooltip("The perfect neutralization color (e.g., Pink).")]
-    public Color neutralizedColor = new Color(0.8f, 0.4f, 0.8f, 0.8f); // Pink
+    public Color neutralizedColor = new Color(0.2f, 0.8f, 0.2f, 0.8f);
 
-    [Header("Mixture Settings")]
-    [Tooltip("How much liquid is added per trigger/drop.")]
-    public float fillAmountPerDrop = 5f; 
-    
-    [Tooltip("The ideal percentage of acid needed to hit the perfect color (0.5 = 50/50 mix).")]
-    [Range(0.1f, 0.9f)]
-    public float targetAcidRatio = 0.5f; 
-    
-    [Tooltip("How forgiving the game is. 0.05 means they can be off by 5% and still win.")]
-    public float tolerance = 0.05f;
+    [Header("Reset Settings")]
+    public Transform[] objectsToReset; 
+
+    // --- NEW: Audio Settings ---
+    [Header("Assistant Audio")]
+    [Tooltip("Drag the Assistant's Audio Source component here")]
+    public AudioSource assistantVoice;
+    [Tooltip("Drag the 'added a lot of acid' clip here")]
+    public AudioClip tooMuchAcidClip;
+    [Tooltip("Drag the 'added a lot of alkali' clip here")]
+    public AudioClip tooMuchBaseClip;
 
     private Material liquidMaterial;
-    
-    private float currentAcid = 0f;
-    private float currentBase = 0f;
-    private bool experimentEnded = false; // Locks the flask once they win or fail
+    private Color initialLiquidColor; // --- NEW: To remember the starting color ---
+
+    private bool containsAcid = false;
+    private bool containsBase = false;
+
+    private Vector3[] initialPositions;
+    private Quaternion[] initialRotations;
 
     void Start()
     {
-        if (liquidRenderer != null) liquidMaterial = liquidRenderer.material;
+        if (objectsToReset != null && objectsToReset.Length > 0)
+        {
+            initialPositions = new Vector3[objectsToReset.Length];
+            initialRotations = new Quaternion[objectsToReset.Length];
+            
+            for (int i = 0; i < objectsToReset.Length; i++)
+            {
+                if (objectsToReset[i] != null)
+                {
+                    initialPositions[i] = objectsToReset[i].position;
+                    initialRotations[i] = objectsToReset[i].rotation;
+                }
+            }
+        }
+
+        if (liquidRenderer != null)
+        {
+            liquidMaterial = liquidRenderer.material;
+            
+            // --- NEW: Save the original color of the liquid when the game starts ---
+            if (liquidMaterial.HasProperty("_BaseColor"))
+                initialLiquidColor = liquidMaterial.GetColor("_BaseColor");
+            else
+                initialLiquidColor = liquidMaterial.color;
+        }
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (experimentEnded) return; // Don't allow more mixing if they already won/failed
-
         if (other.CompareTag("Acid"))
         {
-            AddChemical("Acid", fillAmountPerDrop);
+            AddChemical("Acid");
         }
         else if (other.CompareTag("Base"))
         {
-            AddChemical("Base", fillAmountPerDrop);
+            AddChemical("Base");
         }
     }
 
-    private void AddChemical(string chemicalAdded, float amount)
+    private void AddChemical(string chemicalAdded)
     {
-        // 1. Record what the ratio was BEFORE adding the new drop
-        float previousTotal = currentAcid + currentBase;
-        float previousRatio = previousTotal > 0 ? currentAcid / previousTotal : (chemicalAdded == "Acid" ? 1f : 0f);
-
-        // 2. Add the new chemical
-        if (chemicalAdded == "Acid") currentAcid += amount;
-        else if (chemicalAdded == "Base") currentBase += amount;
-
-        // 3. Calculate the NEW ratio
-        float newTotal = currentAcid + currentBase;
-        float newRatio = currentAcid / newTotal;
-
-        // 4. Update the color immediately so the player can see the change
-        UpdateVisualColor(newRatio);
-
-        // We only check for success/failure if they actually have BOTH chemicals in the flask
-        if (currentAcid > 0 && currentBase > 0)
+        if (!LabManager.Instance.IsFullyProtected())
         {
-            CheckReactionState(previousRatio, newRatio);
-        }
-    }
-
-    private void CheckReactionState(float previousRatio, float newRatio)
-    {
-        // CONDITION A: Did they hit the perfect color zone?
-        if (Mathf.Abs(newRatio - targetAcidRatio) <= tolerance)
-        {
-            // NEW CHECK: They hit the color, but did they wear safety gear?
-            if (!LabManager.Instance.IsFullyProtected())
-            {
-                TriggerFailure("Experiment failed! You hit perfect neutralization, but you aren't wearing your safety gear!");
-                return;
-            }
-
-            TriggerSuccess("Perfect! You matched the neutralization color.");
+            // Null here because we don't have a specific audio for safety gear failure yet!
+            TriggerFailure("CHEMICAL BURN! You handled dangerous chemicals without full safety gear!", null);
             return;
         }
 
-        // CONDITION B: OVERSHOOT CHECK! 
-        // If they were above the target, and jumped completely below it (or vice versa), they added too much!
-        bool wasMostlyAcid = previousRatio > (targetAcidRatio + tolerance);
-        bool isNowMostlyBase = newRatio < (targetAcidRatio - tolerance);
-
-        bool wasMostlyBase = previousRatio < (targetAcidRatio - tolerance);
-        bool isNowMostlyAcid = newRatio > (targetAcidRatio + tolerance);
-
-        if ((wasMostlyAcid && isNowMostlyBase) || (wasMostlyBase && isNowMostlyAcid))
+        if (chemicalAdded == "Acid")
         {
-            TriggerFailure("Experiment failed! You added too much and completely ruined the neutralization color.");
+            if (containsAcid) 
+            {
+                TriggerFailure("Reaction failed! You added too much acid.", tooMuchAcidClip); // Sends the Acid audio
+                return;
+            }
+            containsAcid = true;
         }
-    }
-
-    private void UpdateVisualColor(float currentRatio)
-    {
-        if (liquidMaterial == null) return;
-        Color currentColor;
-
-        // A custom 3-way color blend ensuring it hits exactly your neutralizedColor when the ratio is perfect
-        if (currentRatio > targetAcidRatio)
+        else if (chemicalAdded == "Base")
         {
-            // Mostly Acid - Blends from Pink towards Red
-            float t = (currentRatio - targetAcidRatio) / (1f - targetAcidRatio);
-            currentColor = Color.Lerp(neutralizedColor, acidColor, t);
+            if (containsBase)
+            {
+                TriggerFailure("Reaction failed! You added too much base.", tooMuchBaseClip); // Sends the Alkali audio
+                return;
+            }
+            containsBase = true;
         }
-        else if (currentRatio < targetAcidRatio)
+
+        if (containsAcid && containsBase)
         {
-            // Mostly Base - Blends from Blue towards Pink
-            float t = currentRatio / targetAcidRatio;
-            currentColor = Color.Lerp(baseColor, neutralizedColor, t);
+            TriggerSuccess("Success! The solution is neutralized.");
         }
         else
         {
-            // Perfect match
-            currentColor = neutralizedColor;
+            EquipmentNotification.Instance.ShowMessage($"{chemicalAdded} added safely. Awaiting next chemical...");
         }
-
-        liquidMaterial.SetColor("_BaseColor", currentColor);
-        liquidMaterial.SetColor("_Color", currentColor);
     }
 
-    private void TriggerFailure(string reason)
+    // --- UPDATED: Now takes an AudioClip and plays it when resetting ---
+    private void TriggerFailure(string reason, AudioClip failClip)
     {
-        experimentEnded = true;
         EquipmentNotification.Instance.ShowMessage($"<color=red>FAIL:</color> {reason}");
         
-        // Give them a moment to see their failure, then you could reset the flask here
-        Invoke(nameof(ResetFlask), 3f); 
+        containsAcid = false;
+        containsBase = false;
+
+        // Play the failure audio!
+        if (assistantVoice != null && failClip != null)
+        {
+            assistantVoice.clip = failClip;
+            assistantVoice.Play();
+        }
+
+        ResetExperimentObjects();
+    }
+
+    private void ResetExperimentObjects()
+    {
+        // --- NEW: Revert the liquid back to its original clear/starting color ---
+        if (liquidMaterial != null)
+        {
+            if (liquidMaterial.HasProperty("_BaseColor"))
+                liquidMaterial.SetColor("_BaseColor", initialLiquidColor);
+            
+            liquidMaterial.color = initialLiquidColor;
+        }
+
+        if (objectsToReset == null) return;
+
+        for (int i = 0; i < objectsToReset.Length; i++)
+        {
+            if (objectsToReset[i] != null)
+            {
+                objectsToReset[i].position = initialPositions[i];
+                objectsToReset[i].rotation = initialRotations[i];
+
+                Rigidbody rb = objectsToReset[i].GetComponent<Rigidbody>();
+                if (rb != null)
+                {
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                }
+            }
+        }
     }
 
     private void TriggerSuccess(string message)
     {
-        experimentEnded = true;
         EquipmentNotification.Instance.ShowMessage($"<color=green>SUCCESS:</color> {message}");
         
-        // Ensure it visually snaps to the exact perfect pink
-        liquidMaterial.SetColor("_BaseColor", neutralizedColor);
-        liquidMaterial.SetColor("_Color", neutralizedColor);
-    }
+        if (liquidMaterial != null)
+        {
+            liquidMaterial.SetColor("_BaseColor", neutralizedColor);
+            liquidMaterial.SetColor("_Color", neutralizedColor);
+        }
 
-    private void ResetFlask()
-    {
-        currentAcid = 0f;
-        currentBase = 0f;
-        experimentEnded = false;
-        
-        // Reset color to transparent/empty
-        Color clearColor = new Color(1, 1, 1, 0);
-        liquidMaterial.SetColor("_BaseColor", clearColor);
-        liquidMaterial.SetColor("_Color", clearColor);
-    }
-
-    // The Beakers will call this if they fall over
-    public void ForceFailExperiment(string reason)
-    {
-        if (experimentEnded) return; // Don't fail if they already won
-        
-        experimentEnded = true;
-        EquipmentNotification.Instance.ShowMessage($"<color=red>CATASTROPHE:</color> {reason}");
-        
-        // Reset the flask after 3 seconds
-        Invoke(nameof(ResetFlask), 3f); 
+        // --- NEW: Tell the global manager we finished so it plays the Congrats audio! ---
+        if (ExperimentManager.Instance != null)
+        {
+            ExperimentManager.Instance.ReportExperimentComplete();
+        }
     }
 }
